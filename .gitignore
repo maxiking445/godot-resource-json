@@ -13,3 +13,8 @@ export_presets.cfg
 .mono/
 data_*/
 mono_crash.*.json
+
+# Local development dependency installed by addons/GUT/install_gut.sh.
+# GUT is used for tests only and is not part of the JsonConverter addon.
+/addons/gut/*
+!/addons/gut/install_gut.sh

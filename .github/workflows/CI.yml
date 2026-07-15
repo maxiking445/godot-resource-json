@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7"
+  GUT_REF: godot_4_7
+
+jobs:
+  gut:
+    name: GUT on Godot 4.7
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Godot
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/godot.zip"
+          bin_dir="$RUNNER_TEMP/godot-bin"
+          download_url="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+
+          curl --fail --location --silent --show-error "$download_url" --output "$archive"
+          mkdir -p "$bin_dir"
+          unzip -q "$archive" -d "$bin_dir"
+          mv "$bin_dir/Godot_v${GODOT_VERSION}-stable_linux.x86_64" "$bin_dir/godot"
+          chmod +x "$bin_dir/godot"
+          echo "$bin_dir" >> "$GITHUB_PATH"
+
+      - name: Show Godot version
+        run: godot --version
+
+      - name: Install GUT and run tests
+        run: ./install_GUT.sh

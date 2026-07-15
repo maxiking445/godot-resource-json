@@ -1,2 +1,10 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto detect text files and use consistent LF line endings.
+* text=auto eol=lf
+
+# Development-only files stay in the repository but are omitted from archives
+# downloaded by Asset Library users.
+/tests export-ignore
+/.github export-ignore
+/addons/gut/install_gut.sh export-ignore
+/install_GUT.sh export-ignore
+/.gutconfig.json export-ignore
