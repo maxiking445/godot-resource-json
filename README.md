@@ -3,8 +3,13 @@
 <p align="center">
   <img src="icon.png" alt="ResourceJSON icon" width="256">
 </p>
-
 <p align="center">
+  <!-- GitHub Actions Badge -->
+  <a href="https://github.com/maxiking445/godot-resource-json/actions/workflows/CI.yml">
+    <img src="https://github.com/maxiking445/godot-resource-json/actions/workflows/CI.yml/badge.svg" alt="CI Build">
+  </a>
+ <br>
+
   <img src="https://img.shields.io/github/license/maxiking445/godot-resource-json" alt="License">
   <img src="https://img.shields.io/github/v/release/maxiking445/godot-resource-json" alt="Latest Release">
 </p>
