@@ -5,6 +5,12 @@ const Converter := preload("res://addons/jsonConverter/JsonConverter.gd")
 const ConverterTestResource := preload("res://tests/fixtures/converter_test_resource.gd")
 
 
+func _round_trip(source: Resource, test_name: String) -> Resource:
+	var json := Converter.stringify(source)
+	print("\n[%s] JSON result:\n%s\n" % [test_name, json])
+	return Converter.parse(json)
+
+
 func test_resource_round_trip_preserves_exported_properties() -> void:
 	var source := ConverterTestResource.new()
 	source.title = "Round trip"
@@ -12,7 +18,7 @@ func test_resource_round_trip_preserves_exported_properties() -> void:
 	source.tags = ["json", "resource"]
 	source.settings = {"enabled": true, "ratio": 1.5}
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "exported properties")
 
 	assert_not_null(decoded)
 	assert_eq(decoded.get_script(), ConverterTestResource)
@@ -29,7 +35,7 @@ func test_resource_round_trip_preserves_shared_references() -> void:
 	source.child = shared_child
 	source.settings = {"same_child": shared_child}
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "shared references")
 
 	assert_not_null(decoded.child)
 	assert_eq(decoded.child.resource_name, "Shared child")
@@ -44,7 +50,7 @@ func test_round_trip_preserves_variant_values_and_string_name_keys() -> void:
 		"nested": [Vector3.ONE, StringName("value")],
 	}
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "variant values and StringName keys")
 
 	assert_true(decoded.settings.has(StringName("position")))
 	assert_eq(decoded.settings[StringName("position")], Vector2(12.5, -3.0))
@@ -56,7 +62,7 @@ func test_round_trip_preserves_cyclic_resource_reference() -> void:
 	var source := ConverterTestResource.new()
 	source.child = source
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "cyclic resource reference")
 
 	assert_same(decoded, decoded.child)
 
@@ -77,7 +83,7 @@ func test_round_trip_preserves_integer_and_float_types_without_precision_loss() 
 		"not_a_number": NAN,
 	}
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "exact number types")
 
 	assert_eq(typeof(decoded.settings.maximum_integer), TYPE_INT)
 	assert_eq(decoded.settings.maximum_integer, 9223372036854775807)
@@ -122,7 +128,7 @@ func test_round_trip_preserves_serializable_variant_types() -> void:
 		"packed_vector4": PackedVector4Array([Vector4.ONE, Vector4.ZERO]),
 	}
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "serializable Variant types")
 
 	for key in source.settings:
 		assert_eq(decoded.settings[key], source.settings[key], "Variant mismatch for %s" % key)
@@ -144,7 +150,7 @@ func test_round_trip_preserves_typed_containers() -> void:
 		"dictionary": nested_dictionary,
 	}
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "typed containers")
 
 	assert_true(decoded.typed_numbers.is_typed())
 	assert_eq(decoded.typed_numbers.get_typed_builtin(), TYPE_INT)
@@ -167,7 +173,7 @@ func test_round_trip_preserves_typed_resource_containers() -> void:
 	var typed_resources: Array[ConverterTestResource] = [child]
 	source.settings = {"resources": typed_resources}
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "typed Resource containers")
 	var decoded_resources: Array = decoded.settings.resources
 
 	assert_true(decoded_resources.is_typed())
@@ -185,7 +191,7 @@ func test_round_trip_preserves_native_resource_properties() -> void:
 	source.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
 	source.colors = PackedColorArray([Color.RED, Color.GREEN, Color.BLUE])
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "native Resource properties")
 
 	assert_true(decoded is Gradient)
 	assert_eq(decoded.resource_name, source.resource_name)
@@ -199,7 +205,7 @@ func test_round_trip_preserves_resource_metadata() -> void:
 	source.set_meta("author", "ResourceJSON")
 	source.set_meta("revision", 9223372036854775807)
 
-	var decoded := Converter.parse(Converter.stringify(source))
+	var decoded := _round_trip(source, "Resource metadata")
 
 	assert_true(decoded.has_meta("author"))
 	assert_eq(decoded.get_meta("author"), "ResourceJSON")
