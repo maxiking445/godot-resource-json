@@ -5,6 +5,6 @@
 # downloaded by Asset Library users.
 /tests export-ignore
 /.github export-ignore
-/addons/gut/install_gut.sh export-ignore
+/addons/gut export-ignore
 /install_GUT.sh export-ignore
 /.gutconfig.json export-ignore
