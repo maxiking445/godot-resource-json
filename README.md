@@ -75,6 +75,6 @@ GUT tag or commit instead, set `GUT_REF`, for example:
 GUT_REF=v9.6.0 ./install_GUT.sh
 ```
 
-This command installs GUT and then runs all configured tests. The lower-level
-installer without the automatic test run is located at
-`addons/gut/install_gut.sh`.
+This command installs GUT and then runs all configured tests. The installation
+logic is included directly in the root-level `install_GUT.sh` script, so no
+installer file is kept inside `addons/gut/`.
