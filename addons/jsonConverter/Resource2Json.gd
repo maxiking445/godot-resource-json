@@ -3,8 +3,12 @@ extends RefCounted
 
 const RESOURCE_REFERENCE_KEY := "$ref"
 const STRING_NAME_KEY := "$stringName"
+const INTEGER_KEY := "$integer"
+const FLOAT_KEY := "$float"
+const ARRAY_KEY := "$array"
 const DICTIONARY_KEY := "$dictionary"
 const VARIANT_KEY := "$variant"
+const TYPE_KEY := "$type"
 
 
 static func convert(resource: Resource, indent: String = "\t") -> String:
@@ -20,8 +24,12 @@ static func convert(resource: Resource, indent: String = "\t") -> String:
 
 
 static func _encode_value(value: Variant, context: Dictionary) -> Variant:
-	if value == null or value is bool or value is int or value is float or value is String:
+	if value == null or value is bool or value is String:
 		return value
+	if value is int:
+		return {INTEGER_KEY: str(value)}
+	if value is float:
+		return {FLOAT_KEY: var_to_str(value)}
 	if value is StringName:
 		return {STRING_NAME_KEY: str(value)}
 	if value is Resource:
@@ -30,6 +38,15 @@ static func _encode_value(value: Variant, context: Dictionary) -> Variant:
 		var encoded_items: Array = []
 		for item in value:
 			encoded_items.append(_encode_value(item, context))
+		if value.is_typed():
+			return {
+				ARRAY_KEY: encoded_items,
+				TYPE_KEY: _encode_type(
+					value.get_typed_builtin(),
+					value.get_typed_class_name(),
+					value.get_typed_script()
+				),
+			}
 		return encoded_items
 	if value is Dictionary:
 		var encoded_entries: Array = []
@@ -38,9 +55,38 @@ static func _encode_value(value: Variant, context: Dictionary) -> Variant:
 				"key": _encode_value(key, context),
 				"value": _encode_value(value[key], context),
 			})
-		return {DICTIONARY_KEY: encoded_entries}
+		var encoded_dictionary := {DICTIONARY_KEY: encoded_entries}
+		if value.is_typed():
+			encoded_dictionary[TYPE_KEY] = {
+				"key": _encode_type(
+					value.get_typed_key_builtin(),
+					value.get_typed_key_class_name(),
+					value.get_typed_key_script()
+				),
+				"value": _encode_type(
+					value.get_typed_value_builtin(),
+					value.get_typed_value_class_name(),
+					value.get_typed_value_script()
+				),
+			}
+		return encoded_dictionary
 
 	return {VARIANT_KEY: var_to_str(value)}
+
+
+static func _encode_type(
+	variant_type: int,
+	typed_class_name: StringName,
+	typed_script: Variant
+) -> Dictionary:
+	var script_path := ""
+	if typed_script is Script:
+		script_path = typed_script.resource_path
+	return {
+		"builtin": variant_type,
+		"class": str(typed_class_name),
+		"script": script_path,
+	}
 
 
 static func _encode_resource(resource: Resource, context: Dictionary) -> Dictionary:
@@ -64,7 +110,7 @@ static func _encode_resource(resource: Resource, context: Dictionary) -> Diction
 		var usage: int = property.usage
 		if not usage & PROPERTY_USAGE_STORAGE:
 			continue
-		if property_name == "script" or property_name.begins_with("metadata/"):
+		if property_name == "script":
 			continue
 		if property_name == "resource_name" and resource.resource_name.is_empty():
 			continue

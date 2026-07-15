@@ -16,7 +16,7 @@ func test_resource_to_json_produces_valid_json() -> void:
 	assert_not_null(parsed)
 	assert_true(parsed is Dictionary)
 	assert_eq(parsed.properties.title, "JSON example")
-	assert_eq(parsed.properties.count, 42.0)
+	assert_eq(parsed.properties.count["$integer"], "42")
 
 
 func test_json_to_resource_decodes_native_resource() -> void:

@@ -3,8 +3,12 @@ extends RefCounted
 
 const RESOURCE_REFERENCE_KEY := "$ref"
 const STRING_NAME_KEY := "$stringName"
+const INTEGER_KEY := "$integer"
+const FLOAT_KEY := "$float"
+const ARRAY_KEY := "$array"
 const DICTIONARY_KEY := "$dictionary"
 const VARIANT_KEY := "$variant"
+const TYPE_KEY := "$type"
 
 
 static func convert(json: String) -> Resource:
@@ -39,14 +43,23 @@ static func _decode_value(value: Variant, context: Dictionary) -> Variant:
 		return context.resources.get(int(value.get(RESOURCE_REFERENCE_KEY, 0)))
 	if value.has("properties") and (value.has("script") or value.has("class")):
 		return _decode_resource(value, context)
+	if value.has(INTEGER_KEY):
+		return int(value.get(INTEGER_KEY, "0"))
+	if value.has(FLOAT_KEY):
+		return str_to_var(value.get(FLOAT_KEY, "0.0"))
 	if value.has(STRING_NAME_KEY):
 		return StringName(value.get(STRING_NAME_KEY, ""))
+	if value.has(ARRAY_KEY):
+		var decoded_items: Array = []
+		for item in value.get(ARRAY_KEY, []):
+			decoded_items.append(_decode_value(item, context))
+		return _apply_array_type(decoded_items, value.get(TYPE_KEY, {}))
 	if value.has(DICTIONARY_KEY):
 		var decoded_dictionary := {}
 		for entry in value.get(DICTIONARY_KEY, []):
 			var key: Variant = _decode_value(entry.get("key"), context)
 			decoded_dictionary[key] = _decode_value(entry.get("value"), context)
-		return decoded_dictionary
+		return _apply_dictionary_type(decoded_dictionary, value.get(TYPE_KEY, {}))
 	if value.has(VARIANT_KEY):
 		return str_to_var(value.get(VARIANT_KEY, ""))
 
@@ -54,6 +67,39 @@ static func _decode_value(value: Variant, context: Dictionary) -> Variant:
 	for key in value:
 		decoded_dictionary[key] = _decode_value(value[key], context)
 	return decoded_dictionary
+
+
+static func _apply_array_type(value: Array, type_data: Dictionary) -> Array:
+	if type_data.is_empty():
+		return value
+	return Array(
+		value,
+		int(type_data.get("builtin", TYPE_NIL)),
+		StringName(type_data.get("class", "")),
+		_load_type_script(type_data.get("script", ""))
+	)
+
+
+static func _apply_dictionary_type(value: Dictionary, type_data: Dictionary) -> Dictionary:
+	if type_data.is_empty():
+		return value
+	var key_type: Dictionary = type_data.get("key", {})
+	var value_type: Dictionary = type_data.get("value", {})
+	return Dictionary(
+		value,
+		int(key_type.get("builtin", TYPE_NIL)),
+		StringName(key_type.get("class", "")),
+		_load_type_script(key_type.get("script", "")),
+		int(value_type.get("builtin", TYPE_NIL)),
+		StringName(value_type.get("class", "")),
+		_load_type_script(value_type.get("script", ""))
+	)
+
+
+static func _load_type_script(path: String) -> Script:
+	if path.is_empty():
+		return null
+	return load(path) as Script
 
 
 static func _decode_resource(data: Dictionary, context: Dictionary) -> Resource:
