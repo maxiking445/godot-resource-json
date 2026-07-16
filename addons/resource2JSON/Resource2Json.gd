@@ -1,14 +1,30 @@
 extends RefCounted
 
 
-const RESOURCE_REFERENCE_KEY := "$ref"
-const STRING_NAME_KEY := "$stringName"
-const INTEGER_KEY := "$integer"
-const FLOAT_KEY := "$float"
-const ARRAY_KEY := "$array"
-const DICTIONARY_KEY := "$dictionary"
-const VARIANT_KEY := "$variant"
-const TYPE_KEY := "$type"
+static var VALUE_ENCODERS := [
+	preload("res://addons/resource2JSON/encoder/ResourceReferenceEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/NonFiniteFloatEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/ColorEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Vector2Encoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Vector2iEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Rect2Encoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Rect2iEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Vector3Encoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Vector3iEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Transform2DEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Vector4Encoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Vector4iEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/PlaneEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/QuaternionEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/AABBEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/BasisEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/Transform3DEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/ProjectionEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/NodePathEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/ArrayEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/DictionaryEncoder.gd").new(),
+	preload("res://addons/resource2JSON/encoder/StringEncoder.gd").new(),
+]
 
 
 static func convert(resource: Resource, indent: String = "\t") -> String:
@@ -20,89 +36,40 @@ static func convert(resource: Resource, indent: String = "\t") -> String:
 		"resource_ids": {},
 		"next_id": 1,
 	}
-	return JSON.stringify(_encode_value(resource, context), indent)
+	return JSON.stringify(_encode_resource(resource, context), indent)
 
 
 static func _encode_value(value: Variant, context: Dictionary) -> Variant:
-	if value == null or value is bool or value is String:
+	if value == null or value is bool or value is int:
 		return value
-	if value is int:
-		return {INTEGER_KEY: str(value)}
 	if value is float:
-		return {FLOAT_KEY: var_to_str(value)}
-	if value is StringName:
-		return {STRING_NAME_KEY: str(value)}
-	if value is Resource:
-		return _encode_resource(value, context)
-	if value is Array:
+		if is_finite(value):
+			return value
+	if _is_packed_array(value):
 		var encoded_items: Array = []
 		for item in value:
 			encoded_items.append(_encode_value(item, context))
-		if value.is_typed():
-			return {
-				ARRAY_KEY: encoded_items,
-				TYPE_KEY: _encode_type(
-					value.get_typed_builtin(),
-					value.get_typed_class_name(),
-					value.get_typed_script()
-				),
-			}
 		return encoded_items
-	if value is Dictionary:
-		var encoded_entries: Array = []
-		for key in value:
-			encoded_entries.append({
-				"key": _encode_value(key, context),
-				"value": _encode_value(value[key], context),
-			})
-		var encoded_dictionary := {DICTIONARY_KEY: encoded_entries}
-		if value.is_typed():
-			encoded_dictionary[TYPE_KEY] = {
-				"key": _encode_type(
-					value.get_typed_key_builtin(),
-					value.get_typed_key_class_name(),
-					value.get_typed_key_script()
-				),
-				"value": _encode_type(
-					value.get_typed_value_builtin(),
-					value.get_typed_value_class_name(),
-					value.get_typed_value_script()
-				),
-			}
-		return encoded_dictionary
+	for encoder in VALUE_ENCODERS:
+		if encoder.can_encode(value, context):
+			return encoder.encode(value, context, _encode_value)
+	if value is Resource:
+		return _encode_resource(value, context)
 
-	return {VARIANT_KEY: var_to_str(value)}
+	return var_to_str(value)
 
 
-static func _encode_type(
-	variant_type: int,
-	typed_class_name: StringName,
-	typed_script: Variant
-) -> Dictionary:
-	var script_path := ""
-	if typed_script is Script:
-		script_path = typed_script.resource_path
-	return {
-		"builtin": variant_type,
-		"class": str(typed_class_name),
-		"script": script_path,
-	}
+static func _is_packed_array(value: Variant) -> bool:
+	var value_type := typeof(value)
+	return value_type >= TYPE_PACKED_BYTE_ARRAY and value_type <= TYPE_PACKED_VECTOR4_ARRAY
 
 
-static func _encode_resource(resource: Resource, context: Dictionary) -> Dictionary:
+static func _encode_resource(resource: Resource, context: Dictionary) -> Variant:
 	var instance_id := resource.get_instance_id()
 	var known_ids: Dictionary = context.resource_ids
-	if known_ids.has(instance_id):
-		return {RESOURCE_REFERENCE_KEY: known_ids[instance_id]}
-
 	var resource_id: int = context.next_id
 	context.next_id = resource_id + 1
 	known_ids[instance_id] = resource_id
-
-	var script_path := ""
-	var script := resource.get_script() as Script
-	if script != null:
-		script_path = script.resource_path
 
 	var properties := {}
 	for property in resource.get_property_list():
@@ -118,11 +85,4 @@ static func _encode_resource(resource: Resource, context: Dictionary) -> Diction
 			continue
 		properties[property_name] = _encode_value(resource.get(property_name), context)
 
-	var encoded_resource := {
-		"id": resource_id,
-		"script": script_path,
-		"properties": properties,
-	}
-	if script_path.is_empty():
-		encoded_resource["class"] = resource.get_class()
-	return encoded_resource
+	return properties

@@ -20,7 +20,7 @@ exchange, inspect, and process.
 
 ## Installation and usage
 
-Copy the `addons/jsonConverter/` directory into the `addons/` directory of your
+Copy the `addons/resource2JSON/` directory into the `addons/` directory of your
 Godot project. `JsonConverter.gd` declares the global class `JSONConverter`, so
 you can use it from any GDScript without creating an instance or configuring an
 autoload.
@@ -38,7 +38,8 @@ var formatted_json := JSONConverter.stringify(resource, "  ")
 Restore a Resource from JSON:
 
 ```gdscript
-var resource: Resource = JSONConverter.parse(json)
+const CharacterData := preload("res://character_data.gd")
+var resource: Resource = JSONConverter.parse(json, CharacterData)
 if resource == null:
 	push_error("The JSON could not be converted to a Resource.")
 ```
@@ -47,16 +48,16 @@ The generic `convert()` method chooses the direction based on its argument:
 
 ```gdscript
 var json: String = JSONConverter.convert(resource)
-var restored_resource: Resource = JSONConverter.convert(json)
+var restored_resource: Resource = JSONConverter.convert(json, CharacterData)
 ```
 
 If you do not want to use the global class name, preload the script explicitly:
 
 ```gdscript
-const JsonConverter := preload("res://addons/jsonConverter/JsonConverter.gd")
+const JsonConverter := preload("res://addons/resource2JSON/JsonConverter.gd")
 
 var json := JsonConverter.stringify(resource)
-var restored_resource := JsonConverter.parse(json)
+var restored_resource := JsonConverter.parse(json, CharacterData)
 ```
 
 All public methods are static, so `JSONConverter.new()` is not required. The

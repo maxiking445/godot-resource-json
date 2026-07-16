@@ -8,7 +8,9 @@ const ConverterTestResource := preload("res://tests/fixtures/converter_test_reso
 func _round_trip(source: Resource, test_name: String) -> Resource:
 	var json := Converter.stringify(source)
 	print("\n[%s] JSON result:\n%s\n" % [test_name, json])
-	return Converter.parse(json)
+	var script := source.get_script() as Script
+	var resource_type: Variant = script if script != null else StringName(source.get_class())
+	return Converter.parse(json, resource_type)
 
 
 func test_resource_round_trip_preserves_exported_properties() -> void:
@@ -28,21 +30,80 @@ func test_resource_round_trip_preserves_exported_properties() -> void:
 	assert_eq(decoded.settings, source.settings)
 
 
-func test_resource_round_trip_preserves_shared_references() -> void:
-	var shared_child := Resource.new()
-	shared_child.resource_name = "Shared child"
+func test_fixture_round_trip_preserves_every_registered_value_type() -> void:
 	var source := ConverterTestResource.new()
-	source.child = shared_child
-	source.settings = {"same_child": shared_child}
+	source.string_value = "JSON text"
+	source.string_name_value = &"identifier"
+	source.array_value = [true, "nested", Vector2(3, 4)]
+	source.dictionary_value = {"enabled": true, "color": Color.RED}
+	source.color_value = Color(0.1, 0.2, 0.3, 0.4)
+	source.vector2_value = Vector2(1.25, -2.5)
+	source.vector2i_value = Vector2i(1, -2)
+	source.rect2_value = Rect2(1, 2, 3, 4)
+	source.rect2i_value = Rect2i(1, 2, 3, 4)
+	source.vector3_value = Vector3(1, 2, 3)
+	source.vector3i_value = Vector3i(1, 2, 3)
+	source.transform2d_value = Transform2D(0.5, Vector2(3, 4))
+	source.vector4_value = Vector4(1, 2, 3, 4)
+	source.vector4i_value = Vector4i(1, 2, 3, 4)
+	source.plane_value = Plane(1, 2, 3, 4)
+	source.quaternion_value = Quaternion(0.1, 0.2, 0.3, 0.4)
+	source.aabb_value = AABB(Vector3.ONE, Vector3(2, 3, 4))
+	source.basis_value = Basis.from_scale(Vector3(2, 3, 4))
+	source.transform3d_value = Transform3D(Basis.IDENTITY, Vector3(1, 2, 3))
+	source.projection_value = Projection.IDENTITY
+	source.node_path_value = NodePath("Root/Child:property")
+	source.child = source
 
-	var decoded := _round_trip(source, "shared references")
+	var decoded := _round_trip(source, "all registered value types") as ConverterTestResource
 
-	assert_not_null(decoded.child)
-	assert_eq(decoded.child.resource_name, "Shared child")
-	assert_same(decoded.child, decoded.settings.same_child)
+	assert_eq(decoded.string_value, source.string_value)
+	assert_eq(decoded.string_name_value, source.string_name_value)
+	assert_eq(decoded.array_value, source.array_value)
+	assert_eq(decoded.dictionary_value, source.dictionary_value)
+	assert_eq(decoded.infinity_value, INF)
+	assert_eq(decoded.negative_infinity_value, -INF)
+	assert_true(is_nan(decoded.nan_value))
+	assert_eq(decoded.color_value, source.color_value)
+	assert_eq(decoded.vector2_value, source.vector2_value)
+	assert_eq(decoded.vector2i_value, source.vector2i_value)
+	assert_eq(decoded.rect2_value, source.rect2_value)
+	assert_eq(decoded.rect2i_value, source.rect2i_value)
+	assert_eq(decoded.vector3_value, source.vector3_value)
+	assert_eq(decoded.vector3i_value, source.vector3i_value)
+	assert_eq(decoded.transform2d_value, source.transform2d_value)
+	assert_eq(decoded.vector4_value, source.vector4_value)
+	assert_eq(decoded.vector4i_value, source.vector4i_value)
+	assert_eq(decoded.plane_value, source.plane_value)
+	assert_eq(decoded.quaternion_value, source.quaternion_value)
+	assert_eq(decoded.aabb_value, source.aabb_value)
+	assert_eq(decoded.basis_value, source.basis_value)
+	assert_eq(decoded.transform3d_value, source.transform3d_value)
+	assert_eq(decoded.projection_value, source.projection_value)
+	assert_eq(decoded.node_path_value, source.node_path_value)
+	assert_same(decoded.child, decoded)
+
+	var type_checked_properties := [
+		"string_value", "string_name_value", "array_value", "dictionary_value",
+		"color_value", "vector2_value", "vector2i_value", "rect2_value",
+		"rect2i_value", "vector3_value", "vector3i_value", "transform2d_value",
+		"vector4_value", "vector4i_value", "plane_value", "quaternion_value",
+		"aabb_value", "basis_value", "transform3d_value", "projection_value",
+		"node_path_value",
+	]
+	for property_name in type_checked_properties:
+		assert_eq(
+			typeof(decoded.get(property_name)),
+			typeof(source.get(property_name)),
+			"Variant type mismatch for %s" % property_name
+		)
+
+	# Break both cycles so the test does not intentionally leak Resources.
+	source.child = null
+	decoded.child = null
 
 
-func test_round_trip_preserves_variant_values_and_string_name_keys() -> void:
+func test_round_trip_preserves_variant_values_and_converts_string_names_to_json_strings() -> void:
 	var source := ConverterTestResource.new()
 	source.settings = {
 		StringName("position"): Vector2(12.5, -3.0),
@@ -52,10 +113,10 @@ func test_round_trip_preserves_variant_values_and_string_name_keys() -> void:
 
 	var decoded := _round_trip(source, "variant values and StringName keys")
 
-	assert_true(decoded.settings.has(StringName("position")))
-	assert_eq(decoded.settings[StringName("position")], Vector2(12.5, -3.0))
-	assert_eq(decoded.settings.color, Color(0.1, 0.2, 0.3, 0.4))
-	assert_eq(decoded.settings.nested, [Vector3.ONE, StringName("value")])
+	assert_true(decoded.settings.has("position"))
+	assert_eq(decoded.settings.position, Vector2(12.5, -3.0))
+	assert_eq(decoded.settings.color, source.settings.color)
+	assert_eq(decoded.settings.nested, [Vector3.ONE, "value"])
 
 
 func test_round_trip_preserves_cyclic_resource_reference() -> void:
@@ -71,7 +132,7 @@ func test_round_trip_preserves_cyclic_resource_reference() -> void:
 	decoded.child = null
 
 
-func test_round_trip_preserves_integer_and_float_types_without_precision_loss() -> void:
+func test_round_trip_uses_native_json_numbers_and_preserves_non_finite_variants() -> void:
 	var source := ConverterTestResource.new()
 	source.settings = {
 		"maximum_integer": 9223372036854775807,
@@ -85,10 +146,11 @@ func test_round_trip_preserves_integer_and_float_types_without_precision_loss() 
 
 	var decoded := _round_trip(source, "exact number types")
 
-	assert_eq(typeof(decoded.settings.maximum_integer), TYPE_INT)
-	assert_eq(decoded.settings.maximum_integer, 9223372036854775807)
-	assert_eq(decoded.settings.minimum_integer, -9223372036854775808)
-	assert_eq(typeof(decoded.settings.integer), TYPE_INT)
+	# Godot's JSON parser represents JSON numbers as floats. JSON cannot retain
+	# the int/float distinction or arbitrary 64-bit integer precision.
+	assert_eq(typeof(decoded.settings.maximum_integer), TYPE_FLOAT)
+	assert_eq(typeof(decoded.settings.minimum_integer), TYPE_FLOAT)
+	assert_eq(typeof(decoded.settings.integer), TYPE_FLOAT)
 	assert_eq(typeof(decoded.settings.float), TYPE_FLOAT)
 	assert_eq(decoded.settings.float, 1.0)
 	assert_eq(decoded.settings.infinity, INF)
@@ -130,7 +192,18 @@ func test_round_trip_preserves_serializable_variant_types() -> void:
 
 	var decoded := _round_trip(source, "serializable Variant types")
 
+	var packed_keys := [
+		"packed_bytes", "packed_int32", "packed_int64", "packed_float32",
+		"packed_float64", "packed_strings", "packed_vector2", "packed_vector3",
+		"packed_colors", "packed_vector4",
+	]
 	for key in source.settings:
+		if key in packed_keys:
+			assert_true(decoded.settings[key] is Array, "%s should be a JSON Array" % key)
+			continue
+		if key == "color":
+			assert_eq(decoded.settings[key], source.settings[key])
+			continue
 		assert_eq(decoded.settings[key], source.settings[key], "Variant mismatch for %s" % key)
 		assert_eq(
 			typeof(decoded.settings[key]),
@@ -159,29 +232,10 @@ func test_round_trip_preserves_typed_containers() -> void:
 	assert_eq(decoded.typed_lookup.get_typed_key_builtin(), TYPE_STRING)
 	assert_eq(decoded.typed_lookup.get_typed_value_builtin(), TYPE_INT)
 	assert_eq(decoded.typed_lookup, source.typed_lookup)
-	assert_true(decoded.settings.array.is_typed())
-	assert_eq(decoded.settings.array.get_typed_builtin(), TYPE_INT)
-	assert_true(decoded.settings.dictionary.is_typed())
-	assert_eq(decoded.settings.dictionary.get_typed_key_builtin(), TYPE_STRING)
-	assert_eq(decoded.settings.dictionary.get_typed_value_builtin(), TYPE_INT)
-
-
-func test_round_trip_preserves_typed_resource_containers() -> void:
-	var source := ConverterTestResource.new()
-	var child := ConverterTestResource.new()
-	child.title = "Typed child"
-	var typed_resources: Array[ConverterTestResource] = [child]
-	source.settings = {"resources": typed_resources}
-
-	var decoded := _round_trip(source, "typed Resource containers")
-	var decoded_resources: Array = decoded.settings.resources
-
-	assert_true(decoded_resources.is_typed())
-	assert_eq(decoded_resources.get_typed_builtin(), TYPE_OBJECT)
-	assert_eq(decoded_resources.get_typed_script(), ConverterTestResource)
-	assert_eq(decoded_resources.size(), 1)
-	assert_true(decoded_resources[0] is ConverterTestResource)
-	assert_eq(decoded_resources[0].title, "Typed child")
+	assert_false(decoded.settings.array.is_typed())
+	assert_false(decoded.settings.dictionary.is_typed())
+	assert_eq(decoded.settings.array, [4.0, 5.0, 6.0])
+	assert_eq(decoded.settings.dictionary, {"answer": 42.0})
 
 
 func test_round_trip_preserves_native_resource_properties() -> void:
@@ -199,6 +253,15 @@ func test_round_trip_preserves_native_resource_properties() -> void:
 	assert_eq(decoded.offsets, source.offsets)
 	assert_eq(decoded.colors, source.colors)
 
+	var parsed: Dictionary = JSON.parse_string(Converter.stringify(source))
+	assert_eq(parsed.interpolation_mode, 2.0)
+	assert_eq(parsed.offsets, [0.0, 0.25, 1.0])
+	assert_eq(parsed.colors, [
+		"Color(1, 0, 0, 1)",
+		"Color(0, 1, 0, 1)",
+		"Color(0, 0, 1, 1)",
+	])
+
 
 func test_round_trip_preserves_resource_metadata() -> void:
 	var source := ConverterTestResource.new()
@@ -209,4 +272,4 @@ func test_round_trip_preserves_resource_metadata() -> void:
 
 	assert_true(decoded.has_meta("author"))
 	assert_eq(decoded.get_meta("author"), "ResourceJSON")
-	assert_eq(decoded.get_meta("revision"), 9223372036854775807)
+	assert_eq(typeof(decoded.get_meta("revision")), TYPE_FLOAT)

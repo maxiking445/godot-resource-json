@@ -1,17 +1,33 @@
 extends RefCounted
 
 
-const RESOURCE_REFERENCE_KEY := "$ref"
-const STRING_NAME_KEY := "$stringName"
-const INTEGER_KEY := "$integer"
-const FLOAT_KEY := "$float"
-const ARRAY_KEY := "$array"
-const DICTIONARY_KEY := "$dictionary"
-const VARIANT_KEY := "$variant"
-const TYPE_KEY := "$type"
+static var VALUE_DECODERS := [
+	preload("res://addons/resource2JSON/decoder/ResourceReferenceDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/NonFiniteFloatDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/ColorDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Vector2Decoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Vector2iDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Rect2Decoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Rect2iDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Vector3Decoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Vector3iDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Transform2DDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Vector4Decoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Vector4iDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/PlaneDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/QuaternionDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/AABBDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/BasisDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/Transform3DDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/ProjectionDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/NodePathDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/ArrayDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/DictionaryDecoder.gd").new(),
+	preload("res://addons/resource2JSON/decoder/StringDecoder.gd").new(),
+]
 
 
-static func convert(json: String) -> Resource:
+static func convert(json: String, resource_type: Variant) -> Resource:
 	var parser := JSON.new()
 	var error := parser.parse(json)
 	if error != OK:
@@ -21,145 +37,96 @@ static func convert(json: String) -> Resource:
 		)
 		return null
 
-	var context := {"resources": {}}
-	_register_resources(parser.data, context)
-	var result: Variant = _decode_value(parser.data, context)
-	if result == null or not result is Resource:
-		push_error("The JSON root does not describe a Resource.")
+	if not parser.data is Dictionary:
+		push_error("The JSON root must be an object.")
 		return null
 
-	return result as Resource
+	var result := _create_target_resource(resource_type)
+	if result == null:
+		return null
+	var context := {"resources": {}, "next_resource_id": 1}
+	_decode_into_resource(parser.data, result, context)
+	return result
 
 
 static func _decode_value(value: Variant, context: Dictionary) -> Variant:
-	if value is Array:
-		var decoded_array: Array = []
-		for item in value:
-			decoded_array.append(_decode_value(item, context))
-		return decoded_array
-	if not value is Dictionary:
-		return value
-	if value.has(RESOURCE_REFERENCE_KEY):
-		return context.resources.get(int(value.get(RESOURCE_REFERENCE_KEY, 0)))
-	if value.has("properties") and (value.has("script") or value.has("class")):
-		return _decode_resource(value, context)
-	if value.has(INTEGER_KEY):
-		return int(value.get(INTEGER_KEY, "0"))
-	if value.has(FLOAT_KEY):
-		return str_to_var(value.get(FLOAT_KEY, "0.0"))
-	if value.has(STRING_NAME_KEY):
-		return StringName(value.get(STRING_NAME_KEY, ""))
-	if value.has(ARRAY_KEY):
-		var decoded_items: Array = []
-		for item in value.get(ARRAY_KEY, []):
-			decoded_items.append(_decode_value(item, context))
-		return _apply_array_type(decoded_items, value.get(TYPE_KEY, {}))
-	if value.has(DICTIONARY_KEY):
-		var decoded_dictionary := {}
-		for entry in value.get(DICTIONARY_KEY, []):
-			var key: Variant = _decode_value(entry.get("key"), context)
-			decoded_dictionary[key] = _decode_value(entry.get("value"), context)
-		return _apply_dictionary_type(decoded_dictionary, value.get(TYPE_KEY, {}))
-	if value.has(VARIANT_KEY):
-		return str_to_var(value.get(VARIANT_KEY, ""))
-
-	var decoded_dictionary := {}
-	for key in value:
-		decoded_dictionary[key] = _decode_value(value[key], context)
-	return decoded_dictionary
+	for decoder in VALUE_DECODERS:
+		if decoder.can_decode(value, context):
+			return decoder.decode(value, context, _decode_value)
+	return value
 
 
-static func _apply_array_type(value: Array, type_data: Dictionary) -> Array:
-	if type_data.is_empty():
-		return value
-	return Array(
-		value,
-		int(type_data.get("builtin", TYPE_NIL)),
-		StringName(type_data.get("class", "")),
-		_load_type_script(type_data.get("script", ""))
-	)
+static func _decode_into_resource(
+	properties: Dictionary,
+	resource: Resource,
+	context: Dictionary
+) -> void:
+	var resource_id: int = context.next_resource_id
+	context.next_resource_id = resource_id + 1
+	context.resources[resource_id] = resource
 
-
-static func _apply_dictionary_type(value: Dictionary, type_data: Dictionary) -> Dictionary:
-	if type_data.is_empty():
-		return value
-	var key_type: Dictionary = type_data.get("key", {})
-	var value_type: Dictionary = type_data.get("value", {})
-	return Dictionary(
-		value,
-		int(key_type.get("builtin", TYPE_NIL)),
-		StringName(key_type.get("class", "")),
-		_load_type_script(key_type.get("script", "")),
-		int(value_type.get("builtin", TYPE_NIL)),
-		StringName(value_type.get("class", "")),
-		_load_type_script(value_type.get("script", ""))
-	)
-
-
-static func _load_type_script(path: String) -> Script:
-	if path.is_empty():
-		return null
-	return load(path) as Script
-
-
-static func _decode_resource(data: Dictionary, context: Dictionary) -> Resource:
-	var resource_id := int(data.get("id", 0))
-	var resource := context.resources.get(resource_id) as Resource
-	if resource == null:
-		resource = _create_resource(data)
-	if resource == null:
-		return null
-
-	if resource_id > 0:
-		context.resources[resource_id] = resource
-
-	var properties: Dictionary = data.get("properties", {})
 	for property_name in properties:
-		var decoded_value: Variant = _decode_value(properties[property_name], context)
+		var raw_value: Variant = properties[property_name]
 		var current_value: Variant = resource.get(property_name)
+		var property_info := _find_property(resource, property_name)
+		var decoded_value: Variant
+		if raw_value is Dictionary and int(property_info.get("type", TYPE_NIL)) == TYPE_OBJECT:
+			var nested := _create_native_resource(StringName(property_info.get("class_name", "Resource")))
+			_decode_into_resource(raw_value, nested, context)
+			decoded_value = nested
+		else:
+			decoded_value = _decode_value(raw_value, context)
 		if current_value is Array and decoded_value is Array:
 			current_value.assign(decoded_value)
 			decoded_value = current_value
 		elif current_value is Dictionary and decoded_value is Dictionary:
 			current_value.assign(decoded_value)
 			decoded_value = current_value
+		elif _is_packed_array(current_value) and decoded_value is Array:
+			decoded_value = _convert_packed_array(decoded_value, typeof(current_value))
 		resource.set(property_name, decoded_value)
-	return resource
 
 
-static func _register_resources(value: Variant, context: Dictionary) -> void:
-	if value is Array:
+static func _find_property(resource: Resource, property_name: String) -> Dictionary:
+	for property in resource.get_property_list():
+		if String(property.name) == property_name:
+			return property
+	return {}
+
+
+static func _is_packed_array(value: Variant) -> bool:
+	var value_type := typeof(value)
+	return value_type >= TYPE_PACKED_BYTE_ARRAY and value_type <= TYPE_PACKED_VECTOR4_ARRAY
+
+
+static func _convert_packed_array(value: Array, target_type: int) -> Variant:
+	if target_type == TYPE_PACKED_COLOR_ARRAY:
+		var colors := PackedColorArray()
 		for item in value:
-			_register_resources(item, context)
-		return
-	if not value is Dictionary:
-		return
-
-	if value.has("properties") and (value.has("script") or value.has("class")):
-		var resource_id := int(value.get("id", 0))
-		if resource_id > 0 and not context.resources.has(resource_id):
-			var resource := _create_resource(value)
-			if resource != null:
-				context.resources[resource_id] = resource
-
-	for child in value.values():
-		_register_resources(child, context)
+			if item is Array and item.size() == 4:
+				colors.append(Color(
+					float(item[0]), float(item[1]), float(item[2]), float(item[3])
+				))
+			elif item is Color:
+				colors.append(item)
+		return colors
+	return type_convert(value, target_type)
 
 
-static func _create_resource(data: Dictionary) -> Resource:
-	var script_path := String(data.get("script", ""))
-	if not script_path.is_empty():
-		var script := load(script_path) as Script
-		if script == null:
-			push_error("Could not load Resource script: %s" % script_path)
-			return null
-		var scripted_resource: Variant = script.new()
-		if scripted_resource is Resource:
-			return scripted_resource
-		push_error("Script does not create a Resource: %s" % script_path)
+static func _create_target_resource(resource_type: Variant) -> Resource:
+	if resource_type is Script:
+		var instance: Variant = resource_type.new()
+		if instance is Resource:
+			return instance
+		push_error("The provided script does not create a Resource.")
 		return null
+	if resource_type is String or resource_type is StringName:
+		return _create_native_resource(StringName(resource_type))
+	push_error("A Resource script or native class name must be provided.")
+	return null
 
-	var native_class_name := StringName(data.get("class", "Resource"))
+
+static func _create_native_resource(native_class_name: StringName) -> Resource:
 	if ClassDB.class_exists(native_class_name) and ClassDB.can_instantiate(native_class_name):
 		var instance: Variant = ClassDB.instantiate(native_class_name)
 		if instance is Resource:

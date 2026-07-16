@@ -20,20 +20,20 @@ func test_resource_to_json_produces_valid_json() -> void:
 
 	assert_not_null(parsed)
 	assert_true(parsed is Dictionary)
-	assert_eq(parsed.properties.title, "JSON example")
-	assert_eq(parsed.properties.count["$integer"], "42")
+	assert_eq(parsed.title, "JSON example")
+	assert_eq(parsed.count, 42.0)
+	assert_true(parsed.tags is Array)
+	assert_true(parsed.settings is Dictionary)
+	assert_false(parsed.has("script"))
+	assert_false(parsed.has("class"))
+	assert_false(json.contains("res://"))
 
 
 func test_json_to_resource_decodes_native_resource() -> void:
-	var json := JSON.stringify({
-		"id": 1,
-		"class": "Resource",
-		"script": "",
-		"properties": {"resource_name": "Decoded resource"},
-	})
+	var json := JSON.stringify({"resource_name": "Decoded resource"})
 	_print_json_result("json_to_resource input", json)
 
-	var decoded := Converter.parse(json)
+	var decoded := Converter.parse(json, &"Resource")
 	print("[json_to_resource] Resource result: %s" % var_to_str(decoded))
 
 	assert_not_null(decoded)
@@ -46,9 +46,33 @@ func test_convert_dispatches_both_directions() -> void:
 
 	var json: Variant = Converter.convert(source)
 	_print_json_result("convert resource", json)
-	var decoded: Variant = Converter.convert(json)
+	var decoded: Variant = Converter.convert(json, ConverterTestResource)
 	print("[convert JSON] Resource result: %s" % var_to_str(decoded))
 
 	assert_true(json is String)
 	assert_true(decoded is Resource)
 	assert_eq(decoded.title, "Facade")
+
+
+func test_supported_value_types_use_plain_json_strings() -> void:
+	var source := ConverterTestResource.new()
+	source.settings = {
+		"color": Color.RED,
+		"vector2": Vector2(1, 2),
+		"vector2i": Vector2i(1, 2),
+		"rect2": Rect2(1, 2, 3, 4),
+		"rect2i": Rect2i(1, 2, 3, 4),
+		"vector3": Vector3(1, 2, 3),
+		"vector3i": Vector3i(1, 2, 3),
+		"transform2d": Transform2D.IDENTITY,
+		"vector4": Vector4(1, 2, 3, 4),
+		"vector4i": Vector4i(1, 2, 3, 4),
+	}
+
+	var json := Converter.stringify(source)
+	var parsed: Dictionary = JSON.parse_string(json)
+	var decoded := Converter.parse(json, ConverterTestResource)
+
+	for key in source.settings:
+		assert_true(parsed.settings[key] is String)
+		assert_eq(decoded.settings[key], source.settings[key])
