@@ -1,10 +1,9 @@
 # Auto detect text files and use consistent LF line endings.
 * text=auto eol=lf
 
-# Development-only files stay in the repository but are omitted from archives
-# downloaded by Asset Library users.
-/tests export-ignore
-/.github export-ignore
+
+# Only include the addons folder when downloading from the Asset Library.
+/**        export-ignore
+/addons    !export-ignore
+/addons/** !export-ignore
 /addons/gut export-ignore
-/install_GUT.sh export-ignore
-/.gutconfig.json export-ignore
