@@ -142,6 +142,77 @@ func test_round_trip_decodes_nested_resource_through_shared_decoder_list() -> vo
 	assert_eq(decoded.child.resource_name, "Nested resource")
 
 
+func test_round_trip_preserves_shared_exported_resource_references() -> void:
+	var source := ConverterTestResource.new()
+	var shared := Resource.new()
+	shared.resource_name = "Shared resource"
+	source.child = shared
+	source.second_child = shared
+
+	var decoded := _round_trip(source, "shared exported resource")
+
+	assert_not_null(decoded.child)
+	assert_same(decoded.child, decoded.second_child)
+	assert_eq(decoded.child.resource_name, "Shared resource")
+
+
+func test_round_trip_preserves_exported_packed_arrays() -> void:
+	var source := ConverterTestResource.new()
+	source.packed_bytes_value = PackedByteArray([0, 127, 255])
+	source.packed_int32_value = PackedInt32Array([1, -2, 3])
+	source.packed_int64_value = PackedInt64Array([1, -2, 9007199254740991])
+	source.packed_float32_value = PackedFloat32Array([1.25, -2.5])
+	source.packed_float64_value = PackedFloat64Array([1.25, -2.5])
+	source.packed_strings_value = PackedStringArray(["one", "two"])
+	source.packed_vector2_value = PackedVector2Array([Vector2.ONE, Vector2.ZERO])
+	source.packed_vector3_value = PackedVector3Array([Vector3.ONE, Vector3.ZERO])
+	source.packed_colors_value = PackedColorArray([Color.RED, Color.TRANSPARENT])
+	source.packed_vector4_value = PackedVector4Array([Vector4.ONE, Vector4.ZERO])
+
+	var decoded := _round_trip(source, "exported packed arrays")
+	var property_names := [
+		"packed_bytes_value", "packed_int32_value", "packed_int64_value",
+		"packed_float32_value", "packed_float64_value", "packed_strings_value",
+		"packed_vector2_value", "packed_vector3_value", "packed_colors_value",
+		"packed_vector4_value",
+	]
+
+	for property_name in property_names:
+		assert_eq(decoded.get(property_name), source.get(property_name), property_name)
+		assert_eq(
+			typeof(decoded.get(property_name)),
+			typeof(source.get(property_name)),
+			"Packed array type mismatch for %s" % property_name
+		)
+
+
+func test_round_trip_preserves_nested_json_containers() -> void:
+	var source := ConverterTestResource.new()
+	source.settings = {
+		"levels": [
+			{"enabled": true, "positions": [Vector2(1, 2), Vector2(3, 4)]},
+			{"enabled": false, "positions": []},
+		],
+	}
+
+	var decoded := _round_trip(source, "nested JSON containers")
+
+	assert_eq(decoded.settings, source.settings)
+
+
+func test_strings_with_type_like_text_remain_strings() -> void:
+	var source := ConverterTestResource.new()
+	source.settings = {
+		"missing_parenthesis": "Vector2(1, 2",
+		"unknown_type": "CustomType(1, 2)",
+		"plain_text": "Color is red",
+	}
+
+	var decoded := _round_trip(source, "type-like strings")
+
+	assert_eq(decoded.settings, source.settings)
+
+
 func test_round_trip_uses_native_json_numbers_and_preserves_non_finite_variants() -> void:
 	var source := ConverterTestResource.new()
 	source.settings = {
