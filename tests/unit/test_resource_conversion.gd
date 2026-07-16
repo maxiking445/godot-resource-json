@@ -199,6 +199,23 @@ func test_strings_with_type_like_text_remain_strings() -> void:
 	assert_eq(decoded.settings, source.settings)
 
 
+func test_declared_string_property_does_not_decode_type_syntax() -> void:
+	var values := [
+		"Color(1, 0, 0, 1)",
+		"Vector2(10, 20)",
+		"ResourceRef(1)",
+		"inf",
+	]
+
+	for value in values:
+		var source := ConverterTestResource.new()
+		source.string_value = value
+		var decoded := _round_trip(source, "declared string %s" % value)
+
+		assert_eq(decoded.string_value, value)
+		assert_eq(typeof(decoded.string_value), TYPE_STRING)
+
+
 func test_round_trip_uses_native_json_numbers_and_preserves_non_finite_variants() -> void:
 	var source := ConverterTestResource.new()
 	source.settings = {

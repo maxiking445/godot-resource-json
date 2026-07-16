@@ -3,6 +3,7 @@ extends RefCounted
 
 
 static var decoders := [
+	preload("res://addons/resource2JSON/decoder/DeclaredStringDecoder.gd").new(),
 	preload("res://addons/resource2JSON/decoder/ResourceReferenceDecoder.gd").new(),
 	preload("res://addons/resource2JSON/decoder/NestedResourceDecoder.gd").new(),
 	preload("res://addons/resource2JSON/decoder/NonFiniteFloatDecoder.gd").new(),
