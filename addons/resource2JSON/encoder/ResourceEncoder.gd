@@ -11,7 +11,7 @@ func encode(value: Variant, context: Dictionary, encode_value: Callable) -> Vari
 	context.next_id = resource_id + 1
 	context.resource_ids[resource.get_instance_id()] = resource_id
 
-	var json_object := {}
+	var json_object := {"$resourceId": resource_id}
 	for property in resource.get_property_list():
 		var property_name := String(property.name)
 		var usage: int = property.usage

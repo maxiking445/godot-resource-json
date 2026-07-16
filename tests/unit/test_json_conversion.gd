@@ -3,6 +3,15 @@ extends GutTest
 
 const Converter := preload("res://addons/resource2JSON/JsonConverter.gd")
 const ConverterTestResource := preload("res://tests/fixtures/converter_test_resource.gd")
+const ReferenceContainerTestModel := preload(
+	"res://tests/fixtures/reference_container_test_model.gd"
+)
+const ReferencedTestModelScript := preload(
+	"res://tests/fixtures/referenced_test_model.gd"
+)
+const ForwardReferenceTestModel := preload(
+	"res://tests/fixtures/forward_reference_test_model.gd"
+)
 
 
 func _print_json_result(test_name: String, json: String) -> void:
@@ -60,9 +69,13 @@ func test_json_contains_every_stored_script_property() -> void:
 	var parsed: Dictionary = JSON.parse_string(Converter.stringify(source))
 	var actual_keys: Array = parsed.keys()
 	actual_keys.sort()
+	var expected_keys: Array = _stored_script_property_names(source)
+	expected_keys.append("$resourceId")
+	expected_keys.sort()
 
-	assert_eq(actual_keys, _stored_script_property_names(source))
-	assert_eq(parsed.size(), _stored_script_property_names(source).size())
+	assert_eq(actual_keys, expected_keys)
+	assert_eq(parsed.size(), expected_keys.size())
+	assert_eq(parsed["$resourceId"], 1.0)
 
 
 func test_json_contains_complete_populated_resource_data() -> void:
@@ -148,10 +161,72 @@ func test_json_resource_references_keep_all_relationship_information() -> void:
 	var decoded := Converter.parse(json, ConverterTestResource)
 
 	assert_true(parsed.child is Dictionary)
-	assert_true(parsed.child.is_empty())
+	assert_eq(parsed.child["$resourceId"], 2.0)
 	assert_eq(parsed.second_child, "ResourceRef(2)")
 	assert_not_null(decoded.child)
 	assert_same(decoded.child, decoded.second_child)
+
+
+func test_json_keeps_non_empty_subresource_data_and_shared_model_references() -> void:
+	var source := ReferenceContainerTestModel.new()
+	var shared := ReferencedTestModelScript.new()
+	shared.label = "Shared model"
+	shared.enabled = true
+	shared.values = [1, 2, 3]
+	var unique := ReferencedTestModelScript.new()
+	unique.label = "Array-only model"
+	unique.values = [8, 13]
+	source.a_primary = shared
+	source.b_secondary = shared
+	source.c_models = [shared, unique]
+
+	var json := Converter.stringify(source)
+	var parsed: Dictionary = JSON.parse_string(json)
+	var decoded := Converter.parse(json, ReferenceContainerTestModel)
+
+	assert_eq(parsed["$resourceId"], 1.0)
+	assert_eq(parsed.a_primary["$resourceId"], 2.0)
+	assert_eq(parsed.a_primary.label, "Shared model")
+	assert_eq(parsed.a_primary.enabled, true)
+	assert_eq(parsed.a_primary.values, [1.0, 2.0, 3.0])
+	assert_eq(parsed.b_secondary, "ResourceRef(2)")
+	assert_eq(parsed.c_models[0], "ResourceRef(2)")
+	assert_eq(parsed.c_models[1]["$resourceId"], 3.0)
+	assert_eq(parsed.c_models[1].label, "Array-only model")
+	assert_eq(parsed.c_models[1].values, [8.0, 13.0])
+
+	assert_true(decoded.a_primary is ReferencedTestModel)
+	assert_same(decoded.a_primary, decoded.b_secondary)
+	assert_same(decoded.a_primary, decoded.c_models[0])
+	assert_eq(decoded.a_primary.label, "Shared model")
+	assert_eq(decoded.a_primary.enabled, true)
+	assert_eq(decoded.a_primary.values, [1, 2, 3])
+	assert_true(decoded.c_models[1] is ReferencedTestModel)
+	assert_eq(decoded.c_models[1].label, "Array-only model")
+	assert_eq(decoded.c_models[1].values, [8, 13])
+
+
+func test_forward_reference_is_resolved_and_filled_by_later_model_data() -> void:
+	var source := ForwardReferenceTestModel.new()
+	var shared := ReferencedTestModelScript.new()
+	shared.label = "Defined later in JSON"
+	shared.enabled = true
+	shared.values = [21, 34]
+	source.z_definition = shared
+	source.a_reference = shared
+
+	var json := Converter.stringify(source)
+	var parsed: Dictionary = JSON.parse_string(json)
+	var decoded := Converter.parse(json, ForwardReferenceTestModel)
+
+	assert_eq(parsed.a_reference, "ResourceRef(2)")
+	assert_eq(parsed.z_definition["$resourceId"], 2.0)
+	assert_eq(parsed.z_definition.label, "Defined later in JSON")
+	assert_true(decoded.a_reference is ReferencedTestModel)
+	assert_same(decoded.a_reference, decoded.z_definition)
+	assert_eq(decoded.a_reference.label, "Defined later in JSON")
+	assert_eq(decoded.a_reference.enabled, true)
+	assert_eq(decoded.a_reference.values, [21, 34])
 
 
 func test_convert_dispatches_both_directions() -> void:

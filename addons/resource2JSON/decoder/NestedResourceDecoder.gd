@@ -12,7 +12,10 @@ func can_decode(value: Variant, context: Dictionary) -> bool:
 func decode(value: Variant, context: Dictionary, decode_value: Callable) -> Variant:
 	var property_info: Dictionary = context.property_info
 	var target_class := StringName(property_info.get("class_name", "Resource"))
-	var resource := _create_resource(target_class)
+	var resource_id := int(value.get("$resourceId", 0))
+	var resource := context.resources.get(resource_id) as Resource
+	if resource == null:
+		resource = _create_resource(target_class)
 	var nested_context := _without_property_context(context)
 	nested_context.decode_as_resource = true
 	nested_context.target_resource = resource
@@ -24,6 +27,14 @@ func _create_resource(target_class: StringName) -> Resource:
 		var instance: Variant = ClassDB.instantiate(target_class)
 		if instance is Resource:
 			return instance
+	for global_class in ProjectSettings.get_global_class_list():
+		if StringName(global_class.get("class", "")) != target_class:
+			continue
+		var script := load(String(global_class.get("path", ""))) as Script
+		if script != null:
+			var instance: Variant = script.new()
+			if instance is Resource:
+				return instance
 	return Resource.new()
 
 

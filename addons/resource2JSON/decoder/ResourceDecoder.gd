@@ -12,9 +12,11 @@ func can_decode(value: Variant, context: Dictionary) -> bool:
 func decode(value: Variant, context: Dictionary, decode_value: Callable) -> Variant:
 	var properties := value as Dictionary
 	var resource := context.target_resource as Resource
-	_register_resource(resource, context)
+	_register_resource(resource, context, properties)
 
 	for property_name in properties:
+		if property_name == "$resourceId":
+			continue
 		_decode_property(
 			resource,
 			String(property_name),
@@ -25,9 +27,12 @@ func decode(value: Variant, context: Dictionary, decode_value: Callable) -> Vari
 	return resource
 
 
-func _register_resource(resource: Resource, context: Dictionary) -> void:
-	var resource_id: int = context.next_resource_id
-	context.next_resource_id = resource_id + 1
+func _register_resource(
+	resource: Resource,
+	context: Dictionary,
+	properties: Dictionary
+) -> void:
+	var resource_id := int(properties.get("$resourceId", context.resources.size() + 1))
 	context.resources[resource_id] = resource
 
 
