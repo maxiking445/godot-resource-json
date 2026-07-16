@@ -1,7 +1,7 @@
 extends GutTest
 
 
-const Converter := preload("res://addons/jsonConverter/JsonConverter.gd")
+const Converter := preload("res://addons/resource2JSON/JsonConverter.gd")
 const ConverterTestResource := preload("res://tests/fixtures/converter_test_resource.gd")
 
 

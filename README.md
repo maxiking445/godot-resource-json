@@ -6,7 +6,7 @@
 <p align="center">
   <!-- GitHub Actions Badge -->
   <a href="https://github.com/maxiking445/godot-resource-json/actions/workflows/CI.yml">
-    <img src="https://github.com/maxiking445/godot-resource-json/actions/workflows/CI.yml/badge.svg" alt="CI Build">
+	<img src="https://github.com/maxiking445/godot-resource-json/actions/workflows/CI.yml/badge.svg" alt="CI Build">
   </a>
  <br>
 

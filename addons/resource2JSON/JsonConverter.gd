@@ -2,8 +2,8 @@ extends RefCounted
 class_name JSONConverter
 
 
-const ResourceToJSON := preload("res://addons/jsonConverter/Resource2Json.gd")
-const JSONToResource := preload("res://addons/jsonConverter/Json2Resource.gd")
+const ResourceToJSON := preload("res://addons/resource2JSON/Resource2Json.gd")
+const JSONToResource := preload("res://addons/resource2JSON/Json2Resource.gd")
 
 
 static func convert(input: Variant) -> Variant:
