@@ -17,11 +17,7 @@ func encode(value: Variant, context: Dictionary, encode_value: Callable) -> Vari
 		var usage: int = property.usage
 		if not usage & PROPERTY_USAGE_STORAGE:
 			continue
-		if property_name == "script":
-			continue
-		if property_name == "resource_name" and resource.resource_name.is_empty():
-			continue
-		if property_name == "resource_local_to_scene" and not resource.resource_local_to_scene:
+		if not usage & PROPERTY_USAGE_SCRIPT_VARIABLE:
 			continue
 		json_object[property_name] = encode_value.call(resource.get(property_name), context)
 	return json_object

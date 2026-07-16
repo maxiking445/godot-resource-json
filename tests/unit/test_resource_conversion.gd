@@ -130,22 +130,9 @@ func test_round_trip_preserves_cyclic_resource_reference() -> void:
 	decoded.child = null
 
 
-func test_round_trip_decodes_nested_resource_through_shared_decoder_list() -> void:
-	var source := ConverterTestResource.new()
-	source.child = Resource.new()
-	source.child.resource_name = "Nested resource"
-
-	var decoded := _round_trip(source, "nested resource")
-
-	assert_not_null(decoded.child)
-	assert_true(decoded.child is Resource)
-	assert_eq(decoded.child.resource_name, "Nested resource")
-
-
 func test_round_trip_preserves_shared_exported_resource_references() -> void:
 	var source := ConverterTestResource.new()
 	var shared := Resource.new()
-	shared.resource_name = "Shared resource"
 	source.child = shared
 	source.second_child = shared
 
@@ -153,7 +140,6 @@ func test_round_trip_preserves_shared_exported_resource_references() -> void:
 
 	assert_not_null(decoded.child)
 	assert_same(decoded.child, decoded.second_child)
-	assert_eq(decoded.child.resource_name, "Shared resource")
 
 
 func test_round_trip_preserves_exported_packed_arrays() -> void:
@@ -317,15 +303,3 @@ func test_round_trip_preserves_typed_containers() -> void:
 	assert_false(decoded.settings.dictionary.is_typed())
 	assert_eq(decoded.settings.array, [4.0, 5.0, 6.0])
 	assert_eq(decoded.settings.dictionary, {"answer": 42.0})
-
-
-func test_round_trip_preserves_resource_metadata() -> void:
-	var source := ConverterTestResource.new()
-	source.set_meta("author", "ResourceJSON")
-	source.set_meta("revision", 9223372036854775807)
-
-	var decoded := _round_trip(source, "Resource metadata")
-
-	assert_true(decoded.has_meta("author"))
-	assert_eq(decoded.get_meta("author"), "ResourceJSON")
-	assert_eq(typeof(decoded.get_meta("revision")), TYPE_FLOAT)

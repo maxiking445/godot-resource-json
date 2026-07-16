@@ -29,6 +29,22 @@ func test_resource_to_json_produces_valid_json() -> void:
 	assert_false(json.contains("res://"))
 
 
+func test_resource_to_json_excludes_internal_resource_fields_and_metadata() -> void:
+	var source := ConverterTestResource.new()
+	source.title = "Only script data"
+	source.resource_name = "Internal resource name"
+	source.resource_local_to_scene = true
+	source.set_meta("author", "Must not be serialized")
+
+	var parsed: Dictionary = JSON.parse_string(Converter.stringify(source))
+
+	assert_eq(parsed.title, "Only script data")
+	assert_false(parsed.has("script"))
+	assert_false(parsed.has("resource_name"))
+	assert_false(parsed.has("resource_local_to_scene"))
+	assert_false(parsed.has("metadata/author"))
+
+
 func test_convert_dispatches_both_directions() -> void:
 	var source := ConverterTestResource.new()
 	source.title = "Facade"
