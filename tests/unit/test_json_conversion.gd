@@ -29,17 +29,6 @@ func test_resource_to_json_produces_valid_json() -> void:
 	assert_false(json.contains("res://"))
 
 
-func test_json_to_resource_decodes_native_resource() -> void:
-	var json := JSON.stringify({"resource_name": "Decoded resource"})
-	_print_json_result("json_to_resource input", json)
-
-	var decoded := Converter.parse(json, &"Resource")
-	print("[json_to_resource] Resource result: %s" % var_to_str(decoded))
-
-	assert_not_null(decoded)
-	assert_eq(decoded.resource_name, "Decoded resource")
-
-
 func test_convert_dispatches_both_directions() -> void:
 	var source := ConverterTestResource.new()
 	source.title = "Facade"

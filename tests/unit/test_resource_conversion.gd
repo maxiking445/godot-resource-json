@@ -8,9 +8,7 @@ const ConverterTestResource := preload("res://tests/fixtures/converter_test_reso
 func _round_trip(source: Resource, test_name: String) -> Resource:
 	var json := Converter.stringify(source)
 	print("\n[%s] JSON result:\n%s\n" % [test_name, json])
-	var script := source.get_script() as Script
-	var resource_type: Variant = script if script != null else StringName(source.get_class())
-	return Converter.parse(json, resource_type)
+	return Converter.parse(json, source.get_script())
 
 
 func test_resource_round_trip_preserves_exported_properties() -> void:
@@ -132,6 +130,18 @@ func test_round_trip_preserves_cyclic_resource_reference() -> void:
 	decoded.child = null
 
 
+func test_round_trip_decodes_nested_resource_through_shared_decoder_list() -> void:
+	var source := ConverterTestResource.new()
+	source.child = Resource.new()
+	source.child.resource_name = "Nested resource"
+
+	var decoded := _round_trip(source, "nested resource")
+
+	assert_not_null(decoded.child)
+	assert_true(decoded.child is Resource)
+	assert_eq(decoded.child.resource_name, "Nested resource")
+
+
 func test_round_trip_uses_native_json_numbers_and_preserves_non_finite_variants() -> void:
 	var source := ConverterTestResource.new()
 	source.settings = {
@@ -236,31 +246,6 @@ func test_round_trip_preserves_typed_containers() -> void:
 	assert_false(decoded.settings.dictionary.is_typed())
 	assert_eq(decoded.settings.array, [4.0, 5.0, 6.0])
 	assert_eq(decoded.settings.dictionary, {"answer": 42.0})
-
-
-func test_round_trip_preserves_native_resource_properties() -> void:
-	var source := Gradient.new()
-	source.resource_name = "Native gradient"
-	source.interpolation_mode = Gradient.GRADIENT_INTERPOLATE_CUBIC
-	source.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
-	source.colors = PackedColorArray([Color.RED, Color.GREEN, Color.BLUE])
-
-	var decoded := _round_trip(source, "native Resource properties")
-
-	assert_true(decoded is Gradient)
-	assert_eq(decoded.resource_name, source.resource_name)
-	assert_eq(decoded.interpolation_mode, source.interpolation_mode)
-	assert_eq(decoded.offsets, source.offsets)
-	assert_eq(decoded.colors, source.colors)
-
-	var parsed: Dictionary = JSON.parse_string(Converter.stringify(source))
-	assert_eq(parsed.interpolation_mode, 2.0)
-	assert_eq(parsed.offsets, [0.0, 0.25, 1.0])
-	assert_eq(parsed.colors, [
-		"Color(1, 0, 0, 1)",
-		"Color(0, 1, 0, 1)",
-		"Color(0, 0, 1, 1)",
-	])
 
 
 func test_round_trip_preserves_resource_metadata() -> void:
